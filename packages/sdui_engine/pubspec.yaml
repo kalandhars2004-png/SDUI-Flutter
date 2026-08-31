@@ -1,0 +1,20 @@
+name: sdui_engine
+description: Generic Server-Driven UI Engine for Flutter. JSON -> UiNode -> Registry -> Renderer -> Widgets.
+version: 0.1.0
+publish_to: none
+homepage: https://github.com/example/sdui_engine
+
+environment:
+  sdk: ^3.13.1
+  flutter: ">=3.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:

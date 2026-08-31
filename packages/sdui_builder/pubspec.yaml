@@ -1,0 +1,22 @@
+name: sdui_builder
+description: Visual Builder UI for SDUI Engine - drag-drop, property inspector, JSON pipeline.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.13.1
+  flutter: ">=3.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  sdui_engine:
+    path: ../sdui_engine
+  file_picker: ^10.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
