@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:sdui_builder/sdui_builder.dart';
 import 'package:sdui_engine/sdui_engine.dart';
 
+import 'screens/manage_json_screen.dart';
+import 'services/sdui_graphql_service.dart';
 import 'widgets/custom_components.dart';
 
 void main() {
@@ -21,7 +23,8 @@ class PlaygroundApp extends StatefulWidget {
 class _PlaygroundAppState extends State<PlaygroundApp> {
   late final SduiEngine engine;
   late final BuilderController controller;
-  int _tab = 0; // 0 = builder, 1 = preview, 2 = demo
+  late final SduiGraphqlService gqlService;
+  int _tab = 0; // 0 = builder, 1 = preview, 2 = demo, 3 = manage
 
   @override
   void initState() {
@@ -35,6 +38,9 @@ class _PlaygroundAppState extends State<PlaygroundApp> {
     engine.registerComponent('product_card', ProductCardRenderer());
     engine.registerComponent('custom_card', ProfileCardRenderer());
     engine.registerAction('open_payment', OpenPaymentAction());
+
+    // GraphQL — strictly API level, MySQL behind Java
+    gqlService = SduiGraphqlService.create(endpoint: 'http://127.0.0.1:8080/graphql');
 
     // initial document: demo welcome screen
     final initialDoc = UiDocument(
@@ -123,6 +129,7 @@ class _PlaygroundAppState extends State<PlaygroundApp> {
                     BuilderScreen(controller: controller),
                     _PreviewTab(controller: controller, engine: engine),
                     _DemoTab(engine: engine),
+                    ManageJsonScreen(controller: controller, service: gqlService, onLoaded: () => setState(() => _tab = 0)),
                   ],
                 ),
               ),
@@ -163,6 +170,8 @@ class _TopTabs extends StatelessWidget {
                       _TabBtn(label: isCompact ? 'Preview' : 'Preview (Engine)', icon: Icons.phone_iphone, selected: tab == 1, onTap: () => onChanged(1), compact: isCompact),
                       const SizedBox(width: 8),
                       _TabBtn(label: isCompact ? 'Demo' : 'Custom Injection Demo', icon: Icons.extension, selected: tab == 2, onTap: () => onChanged(2), compact: isCompact),
+                      const SizedBox(width: 8),
+                      _TabBtn(label: isCompact ? 'Manage' : 'Manage JSON', icon: Icons.storage, selected: tab == 3, onTap: () => onChanged(3), compact: isCompact),
                     ],
                   ),
                 ),
