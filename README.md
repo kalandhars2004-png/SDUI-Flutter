@@ -1,231 +1,172 @@
-# SDUI Flutter
+# SDUI Flutter — Generic Server-Driven UI + MySQL GraphQL Server
 
-A **generic Server-Driven UI (SDUI) framework for Flutter**.
+> **JSON → UiNode Tree → ComponentRegistry → Renderer → Flutter Widget**
+> Server (Spring Boot + GraphQL + MySQL) is **just a JSON store** — Flutter `SduiEngine` stays generic and injectable.
 
-The main idea is simple:
+A complete SDUI system: **visual Builder** (drag-drop) + **generic Engine** + **Java server** that stores JSON in MySQL and serves it strictly via GraphQL. Main drag-drop screen and Manage screen share the same `UiNode` tree — edit, save as new, or update existing.
 
-**JSON → UI Model → Component Registry → Renderer → Flutter Widget**
+---
 
-Instead of hardcoding every screen in Flutter, the UI can be defined using JSON and rendered dynamically.
+## How It Works (Pixel by Pixel liked)
 
-## 🚀 What is SDUI?
-
-With SDUI, the server can send UI information like:
-
+**1. JSON in** — paste / pick file / fetch from server:
 ```json
-{
-  "type": "column",
-  "children": [
-    {
-      "type": "text",
-      "props": {
-        "text": "Welcome 👋"
-      }
-    },
-    {
-      "type": "button",
-      "props": {
-        "text": "Continue"
-      }
-    }
-  ]
-}
+{"type":"column","children":[{"type":"text","props":{"text":"Hi"}}]}
+```
+Supports `child` vs `children`, top-level `value/label/padding` flattened to `props`, case-insensitive `sizedBox/SizedBox`.
+
+**2. Parser** `sdui_engine/lib/parser/sdui_parser.dart:1` → `SduiValidator` → `UiNode.fromJson` `core/ui_node.dart:73` (handles `child`, `_reserved` flatten).
+
+**3. Tree** `UiDocument(version, root: UiNode)` — single source for canvas, JSON, preview.
+
+**4. Registry** `registry/component_registry.dart:1` — `Map lowerType → Renderer` + alias. No `switch(type)`.  
+`built_in.dart` registers core (`text`, `column`), `generic_renderers.dart` registers `singleChildScrollView/listTile/elevatedButton`, `AppzillonPlugin` registers `header/input` both as `header` and `appzillon.header`.
+
+**5. Renderer** `renderer/sdui_renderer.dart:1` → `registry.resolve(type) ?? UnknownRenderer` → `renderer.render(node, ctx, child=>renderNode(child))` → native `Text/Container/Row`.
+
+**6. Paint** `RenderParagraph/RenderFlex` → `Canvas.drawParagraph` → GPU pixels.
+
+**Builder ↔ Server flow:**
+```
+[Manage JSON Screen] --GraphQL mutation saveTemplate(name,json)--> [Spring Boot :8080/graphql] --JPA--> [MySQL sdui.sdui_template]
+[Manage JSON Screen] --GraphQL query templates--> [Spring Boot] --SELECT *--> [MySQL] --json--> list
+[Load UI] --t.json--> BuilderController.loadFromJsonStringAsync(json, templateId, templateName) --> _document = newDoc --> canvas + preview auto update (AnimatedBuilder)
+[Builder header Save to DB] --generateJsonAsync()--> json --GraphQL updateTemplate/saveTemplate--> MySQL (create new or update)
+```
+`SduiEngine` never talks to MySQL directly — strictly `GraphQL` API level.
+
+---
+
+## Architecture
+
+```
+                      ┌─────────────────────┐
+                      │  Playground (Flutter)│
+                      │  ┌──────────────┐   │
+                      │  │Builder       │   │
+                      │  │Palette|Canvas│   │
+                      │  │Inspector     │   │
+                      │  └──────┬───────┘   │
+                      │         │ UiNode    │
+                      │  ┌──────▼───────┐   │
+                      │  │ Manage JSON  │◄──┼── GraphQL (graphql_flutter)
+                      │  │paste/pick/   │   │   templates/saveTemplate
+                      │  │list/Load UI  │   │
+                      │  └──────────────┘   │
+                      └──────────┬──────────┘
+                                 │ json String
+                                 ▼
+                      ┌─────────────────────┐
+                      │   SDUI Engine       │  ← generic, no Builder import
+                      │ Parser/Validator    │
+                      │ UiNode/UiDocument   │
+                      │ ComponentRegistry   │◄── AppzillonPlugin + custom.customer_card
+                      │ Renderer            │
+                      └──────────┬──────────┘
+                                 │ Widget
+                                 ▼
+                         Flutter Widgets
+                                 │
+                      ┌──────────┴──────────┐
+                      │  SDUI-Server (Java) │
+                      │ Spring Boot 3.2.5   │
+                      │ GraphQL /graphql    │
+                      │ JPA → MySQL 8      │
+                      │ sdui_template       │
+                      └─────────────────────┘
 ```
 
-The SDUI engine reads this JSON and creates the corresponding Flutter widgets.
+**Dependency:** `playground → sdui_builder → sdui_engine → Flutter` ; `AppzillonPlugin → sdui_engine` ; `Manage Screen --GraphQL--> Server --JPA--> MySQL`
 
-## 🏗️ Architecture
+---
 
-```text
-Server JSON
-    ↓
-UiNode
-    ↓
-Component Registry
-    ↓
-Renderer
-    ↓
-Flutter Widgets
+## Project Structure
+
+```
+D:\MONTH-2\week-5\Flutter\SDUI\              # Flutter SDUI (this repo)
+├─ packages/sdui_engine/lib
+│  ├─ core/ ui_node, ui_document
+│  ├─ parser/ sdui_parser, validator, serializer
+│  ├─ registry/ component_registry (case-insensitive), action_registry
+│  ├─ renderer/ component_renderer, sdui_renderer, render_context
+│  ├─ components/ built_in, generic_renderers, fintech_renderers
+│  ├─ appzillon/ appzillon_plugin, appzillon_renderers
+│  └─ sdui.dart (SduiEngine, SduiView, SduiPlugin)
+├─ packages/sdui_builder/lib
+│  ├─ models/ component_definition, property_definition, appzillon_catalog (6 categories)
+│  ├─ state/ builder_controller (clone, history 50/15, loadFromJsonStringAsync)
+│  └─ screens/ builder_screen (full-screen canvas, red invalid border, Save to DB)
+├─ apps/playground/lib
+│  ├─ main.dart (4 tabs: Builder | Preview | Demo | Manage JSON)
+│  ├─ services/sdui_graphql_service.dart (HttpLink 127.0.0.1:8080/graphql)
+│  └─ screens/manage_json_screen.dart (paste/pick/list/Load UI → auto-redirect)
+└─ docs/ APPZILLON_COMPONENTS.md, APPROACH.md, ARCHITECTURE.md
+
+D:\MONTH-2\week-5\Flutter\SDUI-Server\      # Java Server (outside, as you asked)
+├─ pom.xml (spring-boot-starter-web, graphql, data-jpa, mysql-connector-j)
+├─ src/main/resources/application.yml (datasource: jdbc:mysql://127.0.0.1:3306/sdui, root/root, ddl-auto:update, graphiql enabled)
+├─ src/main/resources/graphql/schema.graphqls
+└─ src/main/java/com/sdui/server
+   ├─ entity/SduiTemplate.java (id UUID, name, json LONGTEXT, version, createdAt)
+   ├─ repository/SduiTemplateRepository.java
+   ├─ service/SduiTemplateService.java (validate type, save/update/delete)
+   └─ graphql/SduiTemplateController.java (@QueryMapping templates, @MutationMapping saveTemplate)
 ```
 
-The project contains two main parts:
+---
 
-```text
-SDUI
-├── SDUI Engine
-│   ├── JSON Parser
-│   ├── UI Model
-│   ├── Component Registry
-│   ├── Action Registry
-│   ├── Renderer
-│   └── Theme
-│
-└── SDUI Builder
-    ├── Component Palette
-    ├── Canvas
-    ├── Property Inspector
-    ├── JSON Generator
-    └── JSON Importer
+## Run — Flutter + Server (MySQL, strictly GraphQL)
+
+**1. MySQL (local, no Docker as you said):**
+- Service `MySQL80` Running, `root/root`, DB `sdui` auto-created (`createDatabaseIfNotExist=true`)
+
+**2. Server:**
+```bash
+cd D:\MONTH-2\week-5\Flutter\SDUI-Server
+mvn spring-boot:run
+# → Tomcat 8080, GraphQL http://127.0.0.1:8080/graphql, GraphiQL http://127.0.0.1:8080/graphiql
 ```
 
-## ✨ Features
+**3. Flutter:**
+```bash
+cd D:\MONTH-2\week-5\Flutter\SDUI\apps\playground
+flutter pub get
+flutter run -d web-server --web-port=8082 --web-hostname=127.0.0.1
+# → http://127.0.0.1:8082
+```
+Or `flutter run -d chrome`
 
-* JSON-based UI rendering
-* Generic recursive `UiNode` model
-* Component Registry pattern
-* Built-in Flutter components
-* Custom component injection
-* Custom action injection
-* Dynamic layouts
-* Theme support
-* Error handling for unknown components
-* Visual drag-and-drop UI builder
-* JSON generation and import
-* Live preview
-* Engine can be used independently from the builder
+**4. Use:**
+- **Builder tab** — drag `Header/Text/Button` (APPZILLON COMPONENTS 49, search, collapsible) → edit props → canvas full-screen, red border if leaf→leaf invalid
+- **Manage JSON tab** — paste JSON or `Pick JSON file` + Name → `Save to MySQL (GraphQL)` → list shows `templates` from MySQL → `Load UI` → auto `controller.loadFromJsonStringAsync(json, templateId)` → redirects to Builder tab and canvas reconstructs (same `UiNode` tree)
+- **After edit** — Builder header now shows `Update DB` (if loaded, shows `id 8chars`) + `Save as New` → `Save to DB` → `updateTemplate` vs `saveTemplate` via GraphQL → MySQL `LONGTEXT` updated
+- **Preview tab** — `SduiView(data: controller.generateJsonMap(), engine: engine)` live, handles `singleChildScrollView` root without double scroll
 
-## 🧩 Built-in Components
-
-The engine currently supports:
-
-```text
-Text
-Button
-Container
-Row
-Column
-Image
-Icon
-Card
-List
-Stack
-Padding
-Center
-Divider
+**GraphQL strictly:**
+```graphql
+query { templates { id name json version } }
+mutation { saveTemplate(name:"Home", json:"{\"type\":\"column\"...}") { id } }
+mutation { updateTemplate(id:"...", json:"...") { id } }
 ```
 
-## 🔌 Custom Components
+---
 
-Applications can add their own components without modifying the SDUI engine.
+## Why This Approach
 
-```dart
-final engine = SduiEngine();
+- **Generic:** One engine for any JSON (friend's `singleChildScrollView` with `value`, Appzillon `header`, custom `customer_card` all via same `register`).
+- **No switch:** Registry pattern → Open/Closed, testable.
+- **Plugin:** `AppzillonPlugin` proves extension without core change; host `custom.*` works alongside.
+- **Single truth:** `UiNode` tree → canvas, JSON, preview all derive, `Generate ↔ Load` round-trip guaranteed.
+- **API-level MySQL:** Flutter never touches DB, only `String json` via GraphQL; MySQL `sdui_template` is dumb store.
 
-engine.registerComponent(
-  "product_card",
-  ProductCardRenderer(),
-);
-```
+---
 
-Then the server can send:
-
-```json
-{
-  "type": "product_card",
-  "props": {
-    "title": "Headphones"
-  }
-}
-```
-
-This makes the engine reusable across different applications.
-
-## 🎨 SDUI Builder
-
-The project also includes a visual builder:
-
-```text
-┌──────────┬──────────────────┬──────────────┐
-│ Palette  │      Canvas      │   Inspector  │
-│          │                  │              │
-│ Text     │   UI Preview     │  Properties  │
-│ Button   │                  │  Styles      │
-│ Card     │                  │  Events      │
-│ Image    │                  │              │
-└──────────┴──────────────────┴──────────────┘
-```
-
-You can:
-
-1. Drag components onto the canvas
-2. Edit their properties
-3. Nest and reorder components
-4. Generate JSON
-5. Import JSON
-6. Preview the generated UI
-
-## 📦 Project Structure
-
-```text
-SDUI/
-├── packages/
-│   ├── sdui_engine/
-│   └── sdui_builder/
-│
-├── apps/
-│   └── playground/
-│
-├── docs/
-└── README.md
-```
-
-## ▶️ Run the Project
-
-Get the dependencies:
+## Test
 
 ```bash
-flutter pub get --directory packages/sdui_engine
-flutter pub get --directory packages/sdui_builder
-flutter pub get --directory apps/playground
+flutter test --directory packages/sdui_engine  # pasted_json_test: singleChildScrollView child→children
+flutter test --directory packages/sdui_builder # pasted_full_test: Column 13 children
+# GraphQL: curl -X POST http://127.0.0.1:8080/graphql -d '{"query":"{templates{id name}}"}'
 ```
 
-Run the playground:
-
-```bash
-cd apps/playground
-flutter run -d chrome
-```
-
-## 🧪 Test
-
-Run engine tests:
-
-```bash
-flutter test --directory packages/sdui_engine
-```
-
-Run builder tests:
-
-```bash
-flutter test --directory packages/sdui_builder
-```
-
-Run analyzer:
-
-```bash
-flutter analyze
-```
-
-## 💡 Core Design
-
-The framework follows a few important rules:
-
-* **Engine is domain-independent**
-* **No giant `switch(type)`**
-* **Components are registered dynamically**
-* **Builder and Engine are separate**
-* **UiNode is the single source of truth**
-* **Host applications can inject custom components**
-* **JSON can be converted back and forth without losing the UI structure**
-
-## 🎯 Goal
-
-The goal of this project is to build a **reusable SDUI engine** that can be plugged into different Flutter applications.
-
-The host application controls the business-specific components, while the SDUI engine handles:
-
-**JSON → Parsing → Registry → Rendering → Flutter UI**
-
-## 📄 License
-
-MIT License
+MIT
