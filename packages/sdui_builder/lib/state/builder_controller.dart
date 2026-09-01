@@ -29,6 +29,10 @@ class BuilderController extends ChangeNotifier {
     _pushHistory();
   }
 
+  // Loaded template tracking for Save/Update flow (injected from Manage screen)
+  String? loadedTemplateId;
+  String? loadedTemplateName;
+
   UiDocument get document => _document;
   UiNode get root => _document.root;
   String? get selectedId => _selectedId;
@@ -37,6 +41,7 @@ class BuilderController extends ChangeNotifier {
 
   bool get canUndo => _historyIndex > 0;
   bool get canRedo => _historyIndex < _history.length - 1;
+  bool get isDirty => _history.isNotEmpty && _document != _history[_historyIndex];
 
   int _countNodes(UiNode n) {
     int c = 1;
@@ -258,23 +263,35 @@ class BuilderController extends ChangeNotifier {
 
   Map<String, dynamic> generateJsonMap() => engine.toJson(_document);
 
-  void loadFromJson(Map<String, dynamic> json) {
+  void loadFromJson(Map<String, dynamic> json, {String? templateId, String? templateName}) {
     final doc = engine.parse(json);
     _setDocument(doc);
     _selectedId = null;
+    loadedTemplateId = templateId;
+    loadedTemplateName = templateName;
   }
 
-  Future<void> loadFromJsonStringAsync(String s) async {
+  Future<void> loadFromJsonStringAsync(String s, {String? templateId, String? templateName}) async {
     await Future.delayed(const Duration(milliseconds: 10));
     final doc = engine.parseJsonString(s);
     _setDocument(doc);
     _selectedId = null;
+    loadedTemplateId = templateId;
+    loadedTemplateName = templateName;
   }
 
-  void loadFromJsonString(String s) {
+  void loadFromJsonString(String s, {String? templateId, String? templateName}) {
     final doc = engine.parseJsonString(s);
     _setDocument(doc);
     _selectedId = null;
+    loadedTemplateId = templateId;
+    loadedTemplateName = templateName;
+  }
+
+  void markAsNewTemplate() {
+    loadedTemplateId = null;
+    loadedTemplateName = null;
+    notifyListeners();
   }
 
   void clear() {
@@ -288,6 +305,8 @@ class BuilderController extends ChangeNotifier {
       ),
     );
     _selectedId = null;
+    loadedTemplateId = null;
+    loadedTemplateName = null;
   }
 
   void undo() {

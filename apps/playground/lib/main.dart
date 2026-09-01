@@ -126,7 +126,21 @@ class _PlaygroundAppState extends State<PlaygroundApp> {
                 child: IndexedStack(
                   index: _tab,
                   children: [
-                    BuilderScreen(controller: controller),
+                    BuilderScreen(
+                      controller: controller,
+                      onSaveToServer: (name, json) async {
+                        if (controller.loadedTemplateId != null) {
+                          await gqlService.updateTemplate(id: controller.loadedTemplateId!, name: name, json: json);
+                          controller.loadedTemplateName = name;
+                          if (mounted) setState(() {});
+                        } else {
+                          final created = await gqlService.saveTemplate(name: name, json: json);
+                          controller.loadedTemplateId = created.id;
+                          controller.loadedTemplateName = created.name;
+                          if (mounted) setState(() {});
+                        }
+                      },
+                    ),
                     _PreviewTab(controller: controller, engine: engine),
                     _DemoTab(engine: engine),
                     ManageJsonScreen(controller: controller, service: gqlService, onLoaded: () => setState(() => _tab = 0)),

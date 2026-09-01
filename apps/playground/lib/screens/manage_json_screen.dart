@@ -63,15 +63,13 @@ class _ManageJsonScreenState extends State<ManageJsonScreen> {
   }
 
   Future<void> _loadIntoMain(SduiTemplateModel t) async {
-    // show loading then auto-load into main drag-drop
     showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
     try {
-      await widget.controller.loadFromJsonStringAsync(t.json);
+      await widget.controller.loadFromJsonStringAsync(t.json, templateId: t.id, templateName: t.name);
       if (!mounted) return;
-      Navigator.pop(context); // close loading
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Loaded "${t.name}" into Main')));
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Loaded "${t.name}" into Main — now edit & Save to DB as new')));
       widget.onLoaded?.call();
-      // if this screen was pushed, pop back
       if (Navigator.canPop(context)) Navigator.pop(context);
     } catch (e) {
       if (mounted) Navigator.pop(context);

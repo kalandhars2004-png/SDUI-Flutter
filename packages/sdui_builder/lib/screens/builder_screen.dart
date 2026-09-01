@@ -12,7 +12,8 @@ import '../widgets/json_viewer.dart';
 
 class BuilderScreen extends StatefulWidget {
   final BuilderController controller;
-  const BuilderScreen({super.key, required this.controller});
+  final Future<void> Function(String name, String json)? onSaveToServer;
+  const BuilderScreen({super.key, required this.controller, this.onSaveToServer});
 
   @override
   State<BuilderScreen> createState() => _BuilderScreenState();
@@ -25,7 +26,7 @@ class _BuilderScreenState extends State<BuilderScreen> {
       backgroundColor: const Color(0xFFF8FAFC),
       body: Column(
         children: [
-          _Header(controller: widget.controller),
+          _Header(controller: widget.controller, onSaveToServer: widget.onSaveToServer),
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
@@ -266,7 +267,8 @@ class _HChip extends StatelessWidget {
 
 class _Header extends StatelessWidget {
   final BuilderController controller;
-  const _Header({required this.controller});
+  final Future<void> Function(String name, String json)? onSaveToServer;
+  const _Header({required this.controller, this.onSaveToServer});
 
   @override
   Widget build(BuildContext context) {
@@ -391,7 +393,7 @@ class _Header extends StatelessWidget {
                   ),
                 ),
               const Spacer(),
-              _HeaderActions(controller: controller, compact: isCompact),
+              _HeaderActions(controller: controller, compact: isCompact, onSaveToServer: onSaveToServer),
             ],
           );
         },
@@ -407,7 +409,8 @@ extension on BuilderController {
 class _HeaderActions extends StatelessWidget {
   final BuilderController controller;
   final bool compact;
-  const _HeaderActions({required this.controller, this.compact = false});
+  final Future<void> Function(String name, String json)? onSaveToServer;
+  const _HeaderActions({required this.controller, this.compact = false, this.onSaveToServer});
 
   @override
   Widget build(BuildContext context) {
@@ -490,6 +493,42 @@ class _HeaderActions extends StatelessWidget {
                 shadowColor: const Color(0xFF0F172A).withValues(alpha: 0.2),
               ),
             ),
+            if (onSaveToServer != null) ...[
+              SizedBox(width: isNarrow ? 6 : 8),
+              AnimatedBuilder(
+                animation: controller,
+                builder: (_, __) {
+                  final isUpdate = controller.loadedTemplateId != null;
+                  final label = isUpdate ? 'Update DB' : 'Save to DB';
+                  final icon = isUpdate ? Icons.cloud_upload : Icons.cloud_done;
+                  return FilledButton.icon(
+                    onPressed: () => _saveToServer(context),
+                    icon: Icon(icon, size: isNarrow ? 14 : 16),
+                    label: Text(label, style: TextStyle(fontSize: isNarrow ? 11 : 12, fontWeight: FontWeight.w700)),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF16A34A),
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.symmetric(horizontal: isNarrow ? 10 : 12, vertical: isNarrow ? 8 : 10),
+                      visualDensity: VisualDensity.compact,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      minimumSize: Size(isNarrow ? 110 : 125, isNarrow ? 32 : 36),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(width: 6),
+              OutlinedButton(
+                onPressed: () => _saveAsNewToServer(context),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF16A34A),
+                  side: const BorderSide(color: Color(0xFF16A34A)),
+                  padding: EdgeInsets.symmetric(horizontal: isNarrow ? 8 : 10, vertical: isNarrow ? 8 : 10),
+                  visualDensity: VisualDensity.compact,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: Text(isNarrow ? 'New' : 'Save as New', style: TextStyle(fontSize: isNarrow ? 11 : 12, fontWeight: FontWeight.w600)),
+              ),
+            ],
           ],
         );
       },
@@ -516,6 +555,79 @@ class _HeaderActions extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _saveToServer(BuildContext context) async {
+    if (onSaveToServer == null) return;
+    final isUpdate = controller.loadedTemplateId != null;
+    String defaultName = controller.loadedTemplateName ?? 'Screen ${DateTime.now().millisecondsSinceEpoch % 1000}';
+    final nameCtrl = TextEditingController(text: defaultName);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text(isUpdate ? 'Update in DB' : 'Save to DB'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isUpdate) ...[
+              Text('Updating "${controller.loadedTemplateName}" (${controller.loadedTemplateId!.substring(0, 8)}...)', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+              const SizedBox(height: 8),
+            ],
+            TextField(controller: nameCtrl, decoration: InputDecoration(labelText: 'Name *', hintText: 'e.g., HomeScreen v2', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), isDense: true, filled: true, fillColor: const Color(0xFFF8FAFC))),
+            const SizedBox(height: 8),
+            Text(isUpdate ? 'Leave name to keep same, or change for Save as New via button' : 'This will create a new template in MySQL via GraphQL', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(c, nameCtrl.text.trim()), style: FilledButton.styleFrom(backgroundColor: const Color(0xFF16A34A)), child: Text(isUpdate ? 'Update' : 'Save')),
+        ],
+      ),
+    );
+    if (name == null || name.isEmpty) return;
+    showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
+    try {
+      final json = await controller.generateJsonAsync(pretty: false);
+      await onSaveToServer!(name, json);
+      if (context.mounted) Navigator.pop(context);
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(isUpdate ? 'Updated "$name" in DB' : 'Saved "$name" to DB (MySQL via GraphQL)')));
+      // if was update, keep id; if was create new via Save, update tracking to new id is handled by service callback? For now mark as new
+      if (!isUpdate) {
+        // Try to fetch back to get id? For now just keep as new, user can reload from Manage
+      }
+    } catch (e) {
+      if (context.mounted) Navigator.pop(context);
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Save failed: $e'), backgroundColor: Colors.red.shade400));
+    }
+  }
+
+  Future<void> _saveAsNewToServer(BuildContext context) async {
+    if (onSaveToServer == null) return;
+    final nameCtrl = TextEditingController(text: 'Screen ${DateTime.now().millisecondsSinceEpoch % 1000}');
+    final name = await showDialog<String>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Save as New to DB'),
+        content: TextField(controller: nameCtrl, decoration: InputDecoration(labelText: 'New Name *', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), isDense: true, filled: true, fillColor: const Color(0xFFF8FAFC))),
+        actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(c, nameCtrl.text.trim()), style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0F172A)), child: const Text('Save New'))],
+      ),
+    );
+    if (name == null || name.isEmpty) return;
+    showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
+    try {
+      final json = await controller.generateJsonAsync(pretty: false);
+      // Force create new by temporarily clearing loaded id
+      final prevId = controller.loadedTemplateId;
+      final prevName = controller.loadedTemplateName;
+      controller.markAsNewTemplate();
+      await onSaveToServer!(name, json);
+      if (context.mounted) Navigator.pop(context);
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Saved as new "$name" to DB')));
+      // keep as new (no id set) — user can load it from Manage to get id
+    } catch (e) {
+      if (context.mounted) Navigator.pop(context);
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Save failed: $e'), backgroundColor: Colors.red.shade400));
+    }
   }
 
   Future<void> _generateJson(BuildContext context) async {
