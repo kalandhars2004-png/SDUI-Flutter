@@ -85,4 +85,26 @@ class SduiGraphqlService {
     if (result.hasException) throw Exception(result.exception.toString());
     return result.data?['deleteTemplate'] as bool? ?? false;
   }
+
+  // Generic dynamic query — still validated against schema (only templatesFiltered/rawQuery allowed)
+  // Use this when you need new filter/sort/fields without adding new static const
+  Future<Map<String, dynamic>?> rawQuery(String document, {Map<String, dynamic> variables = const {}}) async {
+    final result = await client.query(QueryOptions(document: gql(document), variables: variables, fetchPolicy: FetchPolicy.networkOnly));
+    if (result.hasException) throw Exception(result.exception.toString());
+    return result.data;
+  }
+
+  Future<Map<String, dynamic>?> rawMutate(String document, {Map<String, dynamic> variables = const {}}) async {
+    final result = await client.mutate(MutationOptions(document: gql(document), variables: variables));
+    if (result.hasException) throw Exception(result.exception.toString());
+    return result.data;
+  }
+
+  // Example flexible filtered query (uses new server field templatesFiltered)
+  Future<List<SduiTemplateModel>> fetchTemplatesFiltered({String? filter, String? sort}) async {
+    const doc = r'''query Filtered($filter: String, $sort: String) { templatesFiltered(filter: $filter, sort: $sort) { id name json version } }''';
+    final data = await rawQuery(doc, variables: {'filter': filter, 'sort': sort});
+    final list = data?['templatesFiltered'] as List? ?? [];
+    return list.map((e) => SduiTemplateModel.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+  }
 }
