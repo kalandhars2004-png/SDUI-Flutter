@@ -169,7 +169,7 @@ class _ManageJsonScreenState extends State<ManageJsonScreen> {
                 return ListView.separated(
                   padding: const EdgeInsets.all(12),
                   itemCount: items.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
                   itemBuilder: (context, i) {
                     final t = items[i];
                     final preview = t.json.length > 80 ? '${t.json.substring(0, 80)}...' : t.json;

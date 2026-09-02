@@ -36,6 +36,10 @@ class TextRenderer implements ComponentRenderer {
         ? TextOverflow.ellipsis
         : null;
 
+    final fontFamily = style['fontFamily'] as String? ?? props['fontFamily'] as String?;
+    final letterSpacing = PropertyResolver.doubleOrNull(style, 'letterSpacing') ?? PropertyResolver.doubleOrNull(props, 'letterSpacing');
+    final lineHeight = PropertyResolver.doubleOrNull(style, 'lineHeight') ?? PropertyResolver.doubleOrNull(props, 'lineHeight');
+
     final padding = PropertyResolver.paddingFrom(style);
     final margin = PropertyResolver.marginFrom(style);
 
@@ -48,6 +52,9 @@ class TextRenderer implements ComponentRenderer {
         fontSize: fontSize,
         color: color ?? context.theme.textColor,
         fontWeight: weight,
+        fontFamily: fontFamily,
+        letterSpacing: letterSpacing,
+        height: lineHeight,
       ),
     );
     if (padding != EdgeInsets.zero) w = Padding(padding: padding, child: w);

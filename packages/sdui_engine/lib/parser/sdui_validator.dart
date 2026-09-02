@@ -14,6 +14,20 @@ class SduiValidator {
     if (json.containsKey('version') && json['version'] is! String) {
       errors.add('version must be a string');
     }
+    // Handle new entire app screen format: {screenName, layout, components: []}
+    if (json.containsKey('components') && json['components'] is List) {
+      final comps = json['components'] as List;
+      for (var i = 0; i < comps.length; i++) {
+        final c = comps[i];
+        if (c is! Map) {
+          errors.add('components[$i]: must be an object');
+        } else {
+          final r = validateNode(Map<String, dynamic>.from(c as Map), path: 'components[$i]');
+          errors.addAll(r.errors);
+        }
+      }
+      return errors.isEmpty ? const ValidationResult.valid() : ValidationResult.invalid(errors);
+    }
     if (json.containsKey('root')) {
       if (json['root'] is! Map) {
         errors.add('root must be an object');

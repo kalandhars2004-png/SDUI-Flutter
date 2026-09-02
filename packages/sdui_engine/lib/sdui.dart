@@ -28,6 +28,7 @@ class SduiEngine {
   final SduiSerializer serializer;
   late final SduiRenderer renderer;
   SduiTheme theme;
+  SduiDataProvider? dataProvider;
 
   SduiEngine({
     ComponentRegistry? componentRegistry,
@@ -67,6 +68,10 @@ class SduiEngine {
     plugin.register(this);
   }
 
+  void registerDataProvider(SduiDataProvider provider) {
+    dataProvider = provider;
+  }
+
   UiDocument parse(Map<String, dynamic> json) => parser.parse(json);
 
   UiDocument parseJsonString(String jsonString) =>
@@ -83,6 +88,7 @@ class SduiEngine {
     BuildContext context, {
     SduiActionCallback? onAction,
     Map<String, dynamic> data = const {},
+    SduiDataProvider? dataProvider,
   }) {
     final rc = RenderContext(
       context: context,
@@ -91,6 +97,7 @@ class SduiEngine {
       theme: theme,
       onAction: onAction,
       data: data,
+      dataProvider: dataProvider ?? this.dataProvider,
     );
     return renderer.renderNode(doc.root, rc);
   }
@@ -101,9 +108,10 @@ class SduiEngine {
     BuildContext context, {
     SduiActionCallback? onAction,
     Map<String, dynamic> data = const {},
+    SduiDataProvider? dataProvider,
   }) {
     final doc = parse(json);
-    return renderDocument(doc, context, onAction: onAction, data: data);
+    return renderDocument(doc, context, onAction: onAction, data: data, dataProvider: dataProvider);
   }
 
   /// Render from UiNode directly
@@ -111,6 +119,8 @@ class SduiEngine {
     UiNode node,
     BuildContext context, {
     SduiActionCallback? onAction,
+    SduiDataProvider? dataProvider,
+    Map<String, dynamic> data = const {},
   }) {
     final rc = RenderContext(
       context: context,
@@ -118,6 +128,8 @@ class SduiEngine {
       actionRegistry: actionRegistry,
       theme: theme,
       onAction: onAction,
+      dataProvider: dataProvider ?? this.dataProvider,
+      data: data,
     );
     return renderer.renderNode(node, rc);
   }
@@ -130,6 +142,7 @@ class SduiView extends StatelessWidget {
   final SduiActionCallback? onAction;
   final Map<String, dynamic> stateData;
   final SduiTheme? theme;
+  final SduiDataProvider? dataProvider;
 
   const SduiView({
     super.key,
@@ -138,21 +151,23 @@ class SduiView extends StatelessWidget {
     this.onAction,
     this.stateData = const {},
     this.theme,
+    this.dataProvider,
   });
 
   @override
   Widget build(BuildContext context) {
     final effectiveTheme = theme ?? engine.theme;
     final previous = engine.theme;
-    // temporarily override theme for this build if needed
-    engine.theme = effectiveTheme;
+    final prevProvider = engine.dataProvider;
+    if (dataProvider != null) engine.dataProvider = dataProvider;
     Widget w;
     try {
-      w = engine.render(data, context, onAction: onAction, data: stateData);
+      w = engine.render(data, context, onAction: onAction, data: stateData, dataProvider: dataProvider);
     } catch (e) {
       w = _errorWidget(e.toString());
     } finally {
       engine.theme = previous;
+      engine.dataProvider = prevProvider;
     }
     return w;
   }

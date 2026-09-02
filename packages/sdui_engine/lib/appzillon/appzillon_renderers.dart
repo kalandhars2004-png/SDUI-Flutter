@@ -12,20 +12,27 @@ class AppzillonHeaderRenderer implements ComponentRenderer {
     final style = node.style;
     final title = PropertyResolver.string(props, 'title', PropertyResolver.string(props, 'text', 'Header'));
     final subtitle = PropertyResolver.string(props, 'subtitle', '');
-    final bg = PropertyResolver.colorOrNull(style, 'backgroundColor') ?? const Color(0xFF0F172A);
+    final bg = PropertyResolver.colorOrNull(style, 'backgroundColor') ?? PropertyResolver.colorOrNull(props, 'backgroundColor') ?? Colors.white;
+    final titleColor = PropertyResolver.colorOrNull(props, 'titleColor') ?? PropertyResolver.colorOrNull(style, 'titleColor') ?? (bg == Colors.white ? const Color(0xFF1A1A1A) : Colors.white);
+    final titleSize = PropertyResolver.doubleOrNull(props, 'titleSize') ?? PropertyResolver.doubleOrNull(style, 'titleSize') ?? 16;
+    final titleWeight = PropertyResolver.fontWeightFrom(props['titleWeight'] ?? style['titleWeight'] ?? '600');
+    final iconColor = PropertyResolver.colorOrNull(props, 'iconColor') ?? (bg == Colors.white ? Colors.black : Colors.white);
+    final showBack = PropertyResolver.boolVal(props, 'showBack', false);
     final padding = PropertyResolver.paddingFrom(style);
     final effectivePad = padding == EdgeInsets.zero ? const EdgeInsets.symmetric(horizontal: 16, vertical: 14) : padding;
+    final letterSpacing = PropertyResolver.doubleOrNull(props, 'letterSpacing') ?? 0;
     Widget w = Container(
       padding: effectivePad,
-      decoration: BoxDecoration(color: bg),
+      decoration: BoxDecoration(color: bg, border: Border(bottom: BorderSide(color: Colors.grey.shade200))),
       child: Row(children: [
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)), if (subtitle.isNotEmpty) Text(subtitle, style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 11))])),
+        if (showBack) ...[InkWell(onTap: () { final ev = node.events['onTap']; if (ev is Map) context.dispatchAction(Map<String, dynamic>.from(ev as Map)); }, child: Icon(Icons.arrow_back, color: iconColor, size: 22)), const SizedBox(width: 12)],
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: TextStyle(color: titleColor, fontWeight: titleWeight, fontSize: titleSize, letterSpacing: letterSpacing)), if (subtitle.isNotEmpty) Text(subtitle, style: TextStyle(color: titleColor.withValues(alpha: 0.7), fontSize: 11))])),
         if (node.children.isNotEmpty) ...node.children.map(childRenderer),
-        const Icon(Icons.menu, color: Colors.white),
+        if (!showBack) Icon(Icons.more_horiz, color: iconColor, size: 20),
       ]),
     );
     final onTap = node.events['onTap'];
-    if (onTap != null) w = InkWell(onTap: () { if (onTap is Map) context.dispatchAction(Map<String, dynamic>.from(onTap as Map)); }, child: w);
+    if (onTap != null && !showBack) w = InkWell(onTap: () { if (onTap is Map) context.dispatchAction(Map<String, dynamic>.from(onTap as Map)); }, child: w);
     return w;
   }
   @override
@@ -55,8 +62,47 @@ class AppzillonSidebarRenderer implements ComponentRenderer {
 class AppzillonFooterRenderer implements ComponentRenderer {
   @override
   Widget render(UiNode node, RenderContext context, Widget Function(UiNode) childRenderer) {
+    final bg = PropertyResolver.colorOrNull(node.props, 'backgroundColor') ?? PropertyResolver.colorOrNull(node.style, 'backgroundColor') ?? Colors.white;
+    final activeColor = PropertyResolver.colorOrNull(node.props, 'activeColor') ?? const Color(0xFF0052FF);
+    final items = node.props['items'];
+    if (items is List) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(color: bg, border: Border(top: BorderSide(color: Colors.grey.shade200))),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: items.map((e) {
+            final m = Map<String, dynamic>.from(e as Map);
+            final label = m['label'] as String? ?? '';
+            final iconName = m['icon'] as String? ?? 'home';
+            final isActive = m['active'] == true;
+            final color = isActive ? activeColor : Colors.grey;
+            IconData icon;
+            switch (iconName) {
+              case 'home': icon = Icons.home; break;
+              case 'receipt': icon = Icons.receipt_long; break;
+              case 'public': icon = Icons.public; break;
+              case 'person': icon = Icons.person; break;
+              default: icon = Icons.circle;
+            }
+            final onClick = m['onClick'] as String?;
+            final payload = m['payload'];
+            Widget w = Column(mainAxisSize: MainAxisSize.min, children: [Icon(icon, color: color, size: 22), const SizedBox(height: 2), Text(label, style: TextStyle(color: isActive ? activeColor : Colors.grey, fontSize: 11, fontWeight: isActive ? FontWeight.w600 : FontWeight.w400))]);
+            if (onClick != null) {
+              w = InkWell(
+                onTap: () {
+                  final ev = {'action': onClick, 'payload': payload};
+                  context.dispatchAction(Map<String, dynamic>.from(ev));
+                },
+                child: w,
+              );
+            }
+            return Expanded(child: w);
+          }).toList(),
+        ),
+      );
+    }
     final text = PropertyResolver.string(node.props, 'text', PropertyResolver.string(node.props, 'title', '© 2026 Appzillon • Footer'));
-    final bg = PropertyResolver.colorOrNull(node.style, 'backgroundColor') ?? const Color(0xFFF1F5F9);
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(color: bg, border: Border(top: BorderSide(color: Colors.grey.shade200))),

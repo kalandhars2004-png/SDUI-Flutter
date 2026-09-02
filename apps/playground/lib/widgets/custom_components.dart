@@ -93,8 +93,9 @@ class ProfileCardRenderer implements ComponentRenderer {
       w = InkWell(
         borderRadius: BorderRadius.circular(radius),
         onTap: () {
-          if (onTap is Map)
-            context.dispatchAction(Map<String, dynamic>.from(onTap as Map));
+          if (onTap is Map) {
+            context.dispatchAction(Map<String, dynamic>.from(onTap));
+          }
           if (onTap is String) context.dispatchActionType(onTap);
         },
         child: w,
@@ -147,7 +148,7 @@ class ProductCardRenderer implements ComponentRenderer {
               image,
               height: 140,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
+              errorBuilder: (_, _, _) => Container(
                 height: 140,
                 color: Colors.grey.shade200,
                 child: const Icon(Icons.image),
@@ -180,14 +181,13 @@ class ProductCardRenderer implements ComponentRenderer {
                   child: FilledButton(
                     onPressed: () {
                       final ev = node.events['onTap'];
-                      if (ev is Map)
-                        context.dispatchAction(
-                          Map<String, dynamic>.from(ev as Map),
-                        );
-                      else
+                      if (ev is Map) {
+                        context.dispatchAction(Map<String, dynamic>.from(ev));
+                      } else {
                         context.dispatchActionType('show_snackbar', {
                           'message': 'Added $title to cart',
                         });
+                      }
                     },
                     style: FilledButton.styleFrom(
                       backgroundColor: const Color(0xFF0F172A),
@@ -241,6 +241,43 @@ class CustomerCardRenderer implements ComponentRenderer {
   }
   @override
   List<PropDescriptor> get propDescriptors => const [];
+}
+
+class LoadScreenAction implements ActionHandler {
+  @override
+  Future<void> handle(RenderContext context, Map<String, dynamic> params) async {
+    final file = params['file'] as String? ?? params['payload']?['file'] as String? ?? 'unknown';
+    if (context.context.mounted) {
+      ScaffoldMessenger.of(context.context).showSnackBar(SnackBar(content: Text('Load screen: $file')));
+    }
+  }
+}
+
+class ShowTransactionDetailAction implements ActionHandler {
+  @override
+  Future<void> handle(RenderContext context, Map<String, dynamic> params) async {
+    final payload = params['payload'] as Map<String, dynamic>? ?? params;
+    final id = payload['id'] ?? params['id'] ?? '';
+    final desc = payload['description'] ?? params['description'] ?? '';
+    final amount = payload['amount'] ?? params['amount'] ?? '';
+    final date = payload['date'] ?? params['date'] ?? '';
+    if (context.context.mounted) {
+      showDialog(
+        context: context.context,
+        builder: (c) => AlertDialog(
+          title: Text(desc.isNotEmpty ? desc : 'Transaction $id'),
+          content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Amount: ₹ $amount', style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0052FF))),
+            const SizedBox(height: 8),
+            Text('Date: $date', style: TextStyle(color: Colors.grey.shade600)),
+            const SizedBox(height: 8),
+            Text('ID: $id', style: TextStyle(color: Colors.grey.shade500, fontFamily: 'monospace', fontSize: 11)),
+          ]),
+          actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('Close'))],
+        ),
+      );
+    }
+  }
 }
 
 /// Custom action example
